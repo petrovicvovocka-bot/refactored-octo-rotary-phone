@@ -13,6 +13,12 @@ body {
   text-align: center;
 }
 
+#trump {
+  font-size: 20px;
+  margin-bottom: 15px;
+  font-weight: bold;
+}
+
 #hand {
   display: flex;
   justify-content: center;
@@ -33,6 +39,10 @@ body {
   font-weight: bold;
 }
 
+.card.trump {
+  border: 3px solid gold;
+}
+ 
 button {
   padding: 12px 20px;
   font-size: 18px;
