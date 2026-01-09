@@ -1,0 +1,23 @@
+body {
+  margin: 0;
+  font-family: Arial, sans-serif;
+  background: #0b5c2d;
+  color: white;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  height: 100vh;
+}
+
+#app {
+  text-align: center;
+}
+
+button {
+  padding: 12px 20px;
+  font-size: 18px;
+  background: #ffd700;
+  border: none;
+  border-radius: 10px;
+  cursor: pointer;
+}
