@@ -15,8 +15,16 @@ body {
 
 #trump {
   font-size: 20px;
-  margin-bottom: 15px;
+  margin-bottom: 10px;
   font-weight: bold;
+}
+
+#table {
+  min-height: 110px;
+  display: flex;
+  justify-content: center;
+  gap: 10px;
+  margin-bottom: 20px;
 }
 
 #hand {
@@ -37,6 +45,7 @@ body {
   align-items: center;
   font-size: 18px;
   font-weight: bold;
+  cursor: pointer;
 }
 
 .card.trump {
