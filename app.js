@@ -1,14 +1,15 @@
-console.log("STAGE 2 LOADED");
+console.log("STAGE 3 LOADED");
 
 const tg = window.Telegram.WebApp;
 tg.ready();
 
-// Масти и значения (36 карт)
+// Масти и значения
 const suits = ["♠", "♥", "♦", "♣"];
 const ranks = ["6", "7", "8", "9", "10", "J", "Q", "K", "A"];
 
 let deck = [];
 let hand = [];
+let trumpSuit = null;
 
 // Создание колоды
 function createDeck() {
@@ -28,10 +29,15 @@ function shuffle(array) {
   }
 }
 
-// Раздача
+// Раздача + определение козыря
 function dealCards() {
   createDeck();
   shuffle(deck);
+
+  trumpSuit = deck[deck.length - 1].suit;
+  document.getElementById("trump").innerText =
+    "Козырь: " + trumpSuit;
+
   hand = deck.slice(0, 6);
   renderHand();
 }
@@ -44,6 +50,11 @@ function renderHand() {
   hand.forEach(card => {
     const el = document.createElement("div");
     el.className = "card";
+
+    if (card.suit === trumpSuit) {
+      el.classList.add("trump");
+    }
+
     el.innerText = card.rank + card.suit;
     handDiv.appendChild(el);
   });
