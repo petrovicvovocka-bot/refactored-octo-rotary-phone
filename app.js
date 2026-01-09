@@ -1,4 +1,4 @@
-console.log("STAGE 3 LOADED");
+console.log("STAGE 4 LOADED");
 
 const tg = window.Telegram.WebApp;
 tg.ready();
@@ -9,6 +9,7 @@ const ranks = ["6", "7", "8", "9", "10", "J", "Q", "K", "A"];
 
 let deck = [];
 let hand = [];
+let table = [];
 let trumpSuit = null;
 
 // Создание колоды
@@ -29,7 +30,7 @@ function shuffle(array) {
   }
 }
 
-// Раздача + определение козыря
+// Раздача + козырь
 function dealCards() {
   createDeck();
   shuffle(deck);
@@ -39,7 +40,14 @@ function dealCards() {
     "Козырь: " + trumpSuit;
 
   hand = deck.slice(0, 6);
+  table = [];
+  render();
+}
+
+// Отрисовка всего
+function render() {
   renderHand();
+  renderTable();
 }
 
 // Отрисовка руки
@@ -47,7 +55,7 @@ function renderHand() {
   const handDiv = document.getElementById("hand");
   handDiv.innerHTML = "";
 
-  hand.forEach(card => {
+  hand.forEach((card, index) => {
     const el = document.createElement("div");
     el.className = "card";
 
@@ -56,8 +64,30 @@ function renderHand() {
     }
 
     el.innerText = card.rank + card.suit;
+    el.onclick = () => playCard(index);
+
     handDiv.appendChild(el);
   });
+}
+
+// Отрисовка стола
+function renderTable() {
+  const tableDiv = document.getElementById("table");
+  tableDiv.innerHTML = "";
+
+  table.forEach(card => {
+    const el = document.createElement("div");
+    el.className = "card";
+    el.innerText = card.rank + card.suit;
+    tableDiv.appendChild(el);
+  });
+}
+
+// Ход картой
+function playCard(index) {
+  const card = hand.splice(index, 1)[0];
+  table.push(card);
+  render();
 }
 
 // Кнопка
