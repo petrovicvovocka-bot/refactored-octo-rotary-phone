@@ -1,56 +1,74 @@
-console.log("STAGE 4 LOADED");
+console.log("STAGE 5 LOADED");
 
 const tg = window.Telegram.WebApp;
 tg.ready();
 
-// Масти и значения
 const suits = ["♠", "♥", "♦", "♣"];
 const ranks = ["6", "7", "8", "9", "10", "J", "Q", "K", "A"];
+const rankPower = Object.fromEntries(ranks.map((r, i) => [r, i]));
 
 let deck = [];
 let hand = [];
-let table = [];
 let trumpSuit = null;
 
-// Создание колоды
+let attackCard = null;
+let defenseCard = null;
+let phase = "idle"; // idle | attack | defense
+
+// ---------- deck ----------
 function createDeck() {
   deck = [];
-  for (let suit of suits) {
-    for (let rank of ranks) {
-      deck.push({ suit, rank });
+  for (let s of suits) {
+    for (let r of ranks) {
+      deck.push({ suit: s, rank: r });
     }
   }
 }
 
-// Перемешивание
-function shuffle(array) {
-  for (let i = array.length - 1; i > 0; i--) {
+function shuffle(a) {
+  for (let i = a.length - 1; i > 0; i--) {
     const j = Math.floor(Math.random() * (i + 1));
-    [array[i], array[j]] = [array[j], array[i]];
+    [a[i], a[j]] = [a[j], a[i]];
   }
 }
 
-// Раздача + козырь
-function dealCards() {
+// ---------- game ----------
+function deal() {
   createDeck();
   shuffle(deck);
 
   trumpSuit = deck[deck.length - 1].suit;
-  document.getElementById("trump").innerText =
-    "Козырь: " + trumpSuit;
-
   hand = deck.slice(0, 6);
-  table = [];
+
+  attackCard = null;
+  defenseCard = null;
+  phase = "attack";
+
+  document.getElementById("trump").innerText = "Козырь: " + trumpSuit;
+  setInfo("Атака: выбери карту");
   render();
 }
 
-// Отрисовка всего
+function setInfo(text) {
+  document.getElementById("info").innerText = text;
+}
+
+function canBeat(attack, defense) {
+  if (defense.suit === attack.suit) {
+    return rankPower[defense.rank] > rankPower[attack.rank];
+  }
+  if (defense.suit === trumpSuit && attack.suit !== trumpSuit) {
+    return true;
+  }
+  return false;
+}
+
+// ---------- render ----------
 function render() {
   renderHand();
   renderTable();
 }
 
-// Отрисовка руки
 function renderHand() {
   const handDiv = document.getElementById("hand");
   handDiv.innerHTML = "";
@@ -58,37 +76,72 @@ function renderHand() {
   hand.forEach((card, index) => {
     const el = document.createElement("div");
     el.className = "card";
+    if (card.suit === trumpSuit) el.classList.add("trump");
 
-    if (card.suit === trumpSuit) {
-      el.classList.add("trump");
+    let disabled = false;
+
+    if (phase === "defense" && attackCard) {
+      if (!canBeat(attackCard, card)) disabled = true;
     }
 
+    if (disabled) el.classList.add("disabled");
+
     el.innerText = card.rank + card.suit;
-    el.onclick = () => playCard(index);
+
+    el.addEventListener("click", () => {
+      if (disabled) return;
+      onCardClick(index);
+    });
 
     handDiv.appendChild(el);
   });
 }
 
-// Отрисовка стола
 function renderTable() {
-  const tableDiv = document.getElementById("table");
-  tableDiv.innerHTML = "";
+  const table = document.getElementById("table");
+  table.innerHTML = "";
 
-  table.forEach(card => {
-    const el = document.createElement("div");
-    el.className = "card";
-    el.innerText = card.rank + card.suit;
-    tableDiv.appendChild(el);
-  });
+  if (attackCard) {
+    table.appendChild(makeCardEl(attackCard));
+  }
+  if (defenseCard) {
+    table.appendChild(makeCardEl(defenseCard));
+  }
 }
 
-// Ход картой
-function playCard(index) {
-  const card = hand.splice(index, 1)[0];
-  table.push(card);
+function makeCardEl(card) {
+  const el = document.createElement("div");
+  el.className = "card";
+  if (card.suit === trumpSuit) el.classList.add("trump");
+  el.innerText = card.rank + card.suit;
+  return el;
+}
+
+// ---------- logic ----------
+function onCardClick(index) {
+  const card = hand[index];
+
+  if (phase === "attack") {
+    attackCard = card;
+    hand.splice(index, 1);
+    phase = "defense";
+    setInfo("Защита: побей карту");
+  } else if (phase === "defense") {
+    defenseCard = card;
+    hand.splice(index, 1);
+    phase = "attack";
+    setTimeout(endTurn, 700);
+  }
+
   render();
 }
 
-// Кнопка
-document.getElementById("deal").onclick = dealCards;
+function endTurn() {
+  attackCard = null;
+  defenseCard = null;
+  setInfo("Атака: выбери карту");
+  render();
+}
+
+// ---------- button ----------
+document.getElementById("deal").addEventListener("click", deal);
