@@ -11,19 +11,23 @@ body {
 
 #app {
   text-align: center;
+  width: 100%;
+}
+
+#info {
+  margin-bottom: 5px;
+  font-weight: bold;
 }
 
 #trump {
-  font-size: 20px;
   margin-bottom: 10px;
-  font-weight: bold;
 }
 
 #table {
   min-height: 110px;
   display: flex;
   justify-content: center;
-  gap: 10px;
+  gap: 12px;
   margin-bottom: 20px;
 }
 
@@ -46,12 +50,18 @@ body {
   font-size: 18px;
   font-weight: bold;
   cursor: pointer;
+  user-select: none;
 }
 
 .card.trump {
   border: 3px solid gold;
 }
- 
+
+.card.disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
 button {
   padding: 12px 20px;
   font-size: 18px;
