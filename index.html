@@ -1,25 +1,164 @@
 <!DOCTYPE html>
 <html lang="ru">
 <head>
-  <meta charset="UTF-8" />
-  <title>Дурак</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta charset="UTF-8">
+  <title>🃏 Дурак Онлайн</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+  <!-- Telegram Mini App -->
   <script src="https://telegram.org/js/telegram-web-app.js"></script>
-  <link rel="stylesheet" href="style.css?v=5" />
+
+  <style>
+    body {
+      margin: 0;
+      background: #0b5c2d;
+      color: white;
+      font-family: Arial, sans-serif;
+      text-align: center;
+    }
+
+    h1 {
+      margin-top: 10px;
+    }
+
+    #status {
+      margin: 10px 0;
+      font-weight: bold;
+    }
+
+    #table {
+      min-height: 100px;
+      margin: 10px 0;
+      display: flex;
+      justify-content: center;
+      gap: 10px;
+    }
+
+    #hand {
+      display: flex;
+      justify-content: center;
+      gap: 8px;
+      margin-bottom: 20px;
+      flex-wrap: wrap;
+    }
+
+    .card {
+      width: 60px;
+      height: 90px;
+      background: white;
+      color: black;
+      border-radius: 8px;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      font-size: 18px;
+      font-weight: bold;
+      cursor: pointer;
+      user-select: none;
+    }
+
+    .card.disabled {
+      opacity: 0.4;
+      cursor: not-allowed;
+    }
+  </style>
 </head>
 <body>
-  <div id="app">
-    <h1>🃏 Дурак</h1>
 
-    <div id="info">Нажми «Раздать карты»</div>
-    <div id="trump">Козырь: —</div>
+<h1>🃏 Дурак Онлайн</h1>
+<div id="status">Подключение к серверу…</div>
+<div id="table"></div>
+<div id="hand"></div>
 
-    <div id="table"></div>
-    <div id="hand"></div>
+<script>
+/* =====================================================
+   🔴 ВСТАВЬ СЮДА СВОЙ АДРЕС RENDER
+   Пример:
+   const WSS_URL = "wss://durak-server.onrender.com";
+   ===================================================== */
+const WSS_URL = "wss://ТВОЙ_АДРЕС.onrender.com";
 
-    <button id="deal">Раздать карты</button>
-  </div>
+/* ===== Telegram ===== */
+const tg = window.Telegram.WebApp;
+tg.ready();
 
-  <script src="app.js?v=5"></script>
+const user = tg.initDataUnsafe?.user;
+if (!user) {
+  document.getElementById("status").innerText =
+    "Открой игру через Telegram";
+  throw new Error("No Telegram user");
+}
+
+const playerId = user.id;
+
+/* ===== WebSocket ===== */
+const ws = new WebSocket(WSS_URL);
+
+let hand = [];
+
+/* ===== WebSocket events ===== */
+ws.onopen = () => {
+  ws.send(JSON.stringify({
+    type: "join",
+    playerId: playerId
+  }));
+};
+
+ws.onmessage = (event) => {
+  const data = JSON.parse(event.data);
+
+  if (data.type === "start") {
+    hand = data.hand;
+    document.getElementById("status").innerText =
+      data.turn ? "Твой ход" : "Ход соперника";
+    renderHand();
+  }
+
+  if (data.type === "update") {
+    renderTable(data.table);
+  }
+};
+
+ws.onerror = () => {
+  document.getElementById("status").innerText =
+    "Ошибка подключения к серверу";
+};
+
+/* ===== Render functions ===== */
+function renderHand() {
+  const handDiv = document.getElementById("hand");
+  handDiv.innerHTML = "";
+
+  hand.forEach((card, index) => {
+    const el = document.createElement("div");
+    el.className = "card";
+    el.innerText = card.rank + card.suit;
+
+    el.addEventListener("click", () => {
+      ws.send(JSON.stringify({
+        type: "play",
+        card: card
+      }));
+      hand.splice(index, 1);
+      renderHand();
+    });
+
+    handDiv.appendChild(el);
+  });
+}
+
+function renderTable(table) {
+  const tableDiv = document.getElementById("table");
+  tableDiv.innerHTML = "";
+
+  table.forEach(card => {
+    const el = document.createElement("div");
+    el.className = "card";
+    el.innerText = card.rank + card.suit;
+    tableDiv.appendChild(el);
+  });
+}
+</script>
+
 </body>
 </html>
