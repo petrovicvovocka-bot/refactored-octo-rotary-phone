@@ -1,0 +1,8 @@
+{
+  "name": "durak-server",
+  "version": "1.0.0",
+  "type": "module",
+  "dependencies": {
+    "ws": "^8.15.1"
+  }
+}
