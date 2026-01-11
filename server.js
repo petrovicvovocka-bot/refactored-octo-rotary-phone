@@ -1,69 +1,114 @@
 import { WebSocketServer } from "ws";
 
-const wss = new WebSocketServer({ port: 3000 });
-const rooms = new Map();
+const wss = new WebSocketServer({ port: process.env.PORT || 3000 });
 
-function createDeck() {
-  const suits = ["♠", "♥", "♦", "♣"];
-  const ranks = ["6","7","8","9","10","J","Q","K","A"];
-  const deck = [];
-  for (let s of suits)
-    for (let r of ranks)
-      deck.push({ suit: s, rank: r });
-  return deck.sort(() => Math.random() - 0.5);
+const suits = ["♠", "♥", "♦", "♣"];
+const ranks = ["6","7","8","9","10","J","Q","K","A"];
+const power = Object.fromEntries(ranks.map((r,i)=>[r,i]));
+
+function shuffle(a){ return a.sort(()=>Math.random()-0.5); }
+function deck36(){
+  const d=[];
+  for(const s of suits) for(const r of ranks) d.push({suit:s,rank:r});
+  return shuffle(d);
+}
+function canBeat(att, def, trump){
+  if(def.suit===att.suit) return power[def.rank]>power[att.rank];
+  if(def.suit===trump && att.suit!==trump) return true;
+  return false;
 }
 
-wss.on("connection", ws => {
+const room = {
+  players: [],
+  deck: [],
+  hands: {},
+  trump: null,
+  table: { attack:null, defense:null },
+  phase: "wait", // wait | attack | defense
+  turn: null
+};
 
-  ws.on("message", msg => {
-    const data = JSON.parse(msg);
+function send(ws, data){ ws.send(JSON.stringify(data)); }
+function broadcast(data){ room.players.forEach(p=>send(p,data)); }
 
-    // ✅ подключение игрока
-    if (data.type === "join") {
-      ws.playerId = data.playerId;
+wss.on("connection", ws=>{
+  ws.on("message", raw=>{
+    const msg = JSON.parse(raw);
 
-      let room = rooms.get("default");
-      if (!room) {
-        const deck = createDeck();
-        room = {
-          players: [],
-          deck,
-          trump: deck[deck.length - 1].suit,
-          table: []
-        };
-        rooms.set("default", room);
-      }
+    if(msg.type==="join"){
+      ws.pid = msg.playerId;
+      if(room.players.length>=2) return;
 
       room.players.push(ws);
-      ws.room = room;
 
-      console.log("👤 Player joined:", ws.playerId);
+      if(room.players.length===2){
+        room.deck = deck36();
+        room.trump = room.deck[room.deck.length-1].suit;
+        room.hands[room.players[0].pid]=room.deck.splice(0,6);
+        room.hands[room.players[1].pid]=room.deck.splice(0,6);
+        room.turn = room.players[0].pid;
+        room.phase="attack";
 
-      if (room.players.length === 2) {
-        room.players.forEach((p, i) => {
-          p.send(JSON.stringify({
-            type: "start",
-            hand: room.deck.splice(0, 6),
+        room.players.forEach(p=>{
+          send(p,{
+            type:"state",
+            hand: room.hands[p.pid],
             trump: room.trump,
-            turn: i === 0
-          }));
+            phase: room.phase,
+            yourTurn: p.pid===room.turn,
+            table: room.table
+          });
         });
       }
     }
 
-    // ✅ ход игрока
-    if (data.type === "play") {
-      ws.room.table.push(data.card);
+    if(msg.type==="attack"){
+      if(room.phase!=="attack") return;
+      if(ws.pid!==room.turn) return;
 
-      ws.room.players.forEach(p => {
-        p.send(JSON.stringify({
-          type: "update",
-          table: ws.room.table,
-          lastMoveBy: ws.playerId
-        }));
-      });
+      const hand = room.hands[ws.pid];
+      const idx = hand.findIndex(c=>c.rank===msg.card.rank && c.suit===msg.card.suit);
+      if(idx<0) return;
+
+      room.table.attack = hand.splice(idx,1)[0];
+      room.phase="defense";
+      room.turn = room.players.find(p=>p.pid!==ws.pid).pid;
+
+      broadcast({ type:"update", table:room.table, phase:room.phase, turn:room.turn });
+    }
+
+    if(msg.type==="defend"){
+      if(room.phase!=="defense") return;
+      if(ws.pid!==room.turn) return;
+
+      const hand = room.hands[ws.pid];
+      const idx = hand.findIndex(c=>c.rank===msg.card.rank && c.suit===msg.card.suit);
+      if(idx<0) return;
+
+      const def = hand[idx];
+      if(!canBeat(room.table.attack, def, room.trump)) return;
+
+      room.table.defense = hand.splice(idx,1)[0];
+      room.phase="attack";
+      room.turn = room.players.find(p=>p.pid!==ws.pid).pid;
+
+      broadcast({ type:"update", table:room.table, phase:room.phase, turn:room.turn });
+    }
+
+    if(msg.type==="take"){
+      if(room.phase!=="defense") return;
+      if(ws.pid!==room.turn) return;
+
+      room.hands[ws.pid].push(room.table.attack);
+      if(room.table.defense) room.hands[ws.pid].push(room.table.defense);
+
+      room.table={attack:null, defense:null};
+      room.phase="attack";
+      room.turn = room.players.find(p=>p.pid!==ws.pid).pid;
+
+      broadcast({ type:"update", table:room.table, phase:room.phase, turn:room.turn });
     }
   });
 });
 
-console.log("✅ Server with Telegram auth: ws://localhost:3000");
+console.log("✅ Durak server 6.3 running");
