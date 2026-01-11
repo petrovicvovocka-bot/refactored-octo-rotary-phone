@@ -2,7 +2,14 @@
   "name": "durak-server",
   "version": "1.0.0",
   "type": "module",
+  "main": "server.js",
+  "engines": {
+    "node": ">=18"
+  },
   "dependencies": {
     "ws": "^8.15.1"
+  },
+  "scripts": {
+    "start": "node server.js"
   }
 }
