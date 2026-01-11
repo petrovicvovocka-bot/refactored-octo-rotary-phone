@@ -2,7 +2,7 @@
 <html lang="ru">
 <head>
 <meta charset="UTF-8">
-<title>🃏 Дурак Онлайн</title>
+<title>🃏 Дурак</title>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <script src="https://telegram.org/js/telegram-web-app.js"></script>
 <style>
@@ -10,8 +10,7 @@ body{background:#0b5c2d;color:#fff;font-family:Arial;text-align:center}
 #hand{display:flex;gap:8px;justify-content:center;flex-wrap:wrap}
 .card{width:60px;height:90px;background:#fff;color:#000;border-radius:8px;
 display:flex;align-items:center;justify-content:center;cursor:pointer}
-.disabled{opacity:.4;cursor:not-allowed}
-button{padding:8px 14px;font-size:16px}
+button{padding:8px 14px;font-size:16px;margin:4px}
 </style>
 </head>
 <body>
@@ -21,6 +20,8 @@ button{padding:8px 14px;font-size:16px}
 <div id="trump"></div>
 <div id="table"></div>
 <div id="hand"></div>
+
+<button id="bito" style="display:none">Бито</button>
 <button id="take" style="display:none">Забрать</button>
 
 <script>
@@ -35,13 +36,15 @@ ws.onopen=()=>ws.send(JSON.stringify({type:"join",playerId:user.id}));
 
 ws.onmessage=e=>{
   const d=JSON.parse(e.data);
+
   if(d.type==="state"){
     hand=d.hand; phase=d.phase; yourTurn=d.yourTurn; table=d.table;
     document.getElementById("trump").innerText="Козырь: "+d.trump;
     render();
   }
+
   if(d.type==="update"){
-    phase=d.phase; yourTurn=(d.turn===user.id); table=d.table;
+    table=d.table;
     render();
   }
 };
@@ -70,10 +73,16 @@ function render(){
     h.appendChild(el);
   });
 
+  document.getElementById("bito").style.display =
+    (phase==="defense" && !yourTurn) ? "inline-block":"none";
+
   document.getElementById("take").style.display =
     (phase==="defense" && yourTurn) ? "inline-block":"none";
 }
 
+document.getElementById("bito").onclick=()=>{
+  ws.send(JSON.stringify({type:"bito"}));
+};
 document.getElementById("take").onclick=()=>{
   ws.send(JSON.stringify({type:"take"}));
 };
