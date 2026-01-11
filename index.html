@@ -1,159 +1,82 @@
 <!DOCTYPE html>
 <html lang="ru">
 <head>
-  <meta charset="UTF-8">
-  <title>🃏 Дурак Онлайн</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-
-  <!-- Telegram Mini App -->
-  <script src="https://telegram.org/js/telegram-web-app.js"></script>
-
-  <style>
-    body {
-      margin: 0;
-      background: #0b5c2d;
-      color: white;
-      font-family: Arial, sans-serif;
-      text-align: center;
-    }
-
-    h1 {
-      margin-top: 10px;
-    }
-
-    #status {
-      margin: 10px 0;
-      font-weight: bold;
-    }
-
-    #table {
-      min-height: 100px;
-      margin: 10px 0;
-      display: flex;
-      justify-content: center;
-      gap: 10px;
-    }
-
-    #hand {
-      display: flex;
-      justify-content: center;
-      gap: 8px;
-      margin-bottom: 20px;
-      flex-wrap: wrap;
-    }
-
-    .card {
-      width: 60px;
-      height: 90px;
-      background: white;
-      color: black;
-      border-radius: 8px;
-      display: flex;
-      justify-content: center;
-      align-items: center;
-      font-size: 18px;
-      font-weight: bold;
-      cursor: pointer;
-      user-select: none;
-    }
-
-    .card.disabled {
-      opacity: 0.4;
-      cursor: not-allowed;
-    }
-  </style>
+<meta charset="UTF-8">
+<title>🃏 Дурак Онлайн</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<script src="https://telegram.org/js/telegram-web-app.js"></script>
+<style>
+body{background:#0b5c2d;color:#fff;font-family:Arial;text-align:center}
+#hand{display:flex;gap:8px;justify-content:center;flex-wrap:wrap}
+.card{width:60px;height:90px;background:#fff;color:#000;border-radius:8px;
+display:flex;align-items:center;justify-content:center;cursor:pointer}
+.disabled{opacity:.4;cursor:not-allowed}
+button{padding:8px 14px;font-size:16px}
+</style>
 </head>
 <body>
 
-<h1>🃏 Дурак Онлайн</h1>
-<div id="status">Подключение к серверу…</div>
+<h1>🃏 Дурак</h1>
+<div id="info"></div>
+<div id="trump"></div>
 <div id="table"></div>
 <div id="hand"></div>
+<button id="take" style="display:none">Забрать</button>
 
 <script>
-/* ===== ПУБЛИЧНЫЙ WEBSOCKET С RENDER ===== */
-const WSS_URL = "wss://durak-server-pfxg.onrender.com";
+const WSS_URL="wss://durak-server-pfxg.onrender.com";
+const tg=window.Telegram.WebApp; tg.ready();
+const user=tg.initDataUnsafe.user;
+const ws=new WebSocket(WSS_URL);
 
-/* ===== Telegram ===== */
-const tg = window.Telegram.WebApp;
-tg.ready();
+let hand=[], phase="", yourTurn=false, table={};
 
-const user = tg.initDataUnsafe?.user;
-if (!user) {
-  document.getElementById("status").innerText =
-    "Открой игру через Telegram";
-  throw new Error("No Telegram user");
-}
+ws.onopen=()=>ws.send(JSON.stringify({type:"join",playerId:user.id}));
 
-const playerId = user.id;
-
-/* ===== WebSocket ===== */
-const ws = new WebSocket(WSS_URL);
-
-let hand = [];
-
-/* ===== WebSocket events ===== */
-ws.onopen = () => {
-  ws.send(JSON.stringify({
-    type: "join",
-    playerId: playerId
-  }));
-};
-
-ws.onmessage = (event) => {
-  const data = JSON.parse(event.data);
-
-  if (data.type === "start") {
-    hand = data.hand;
-    document.getElementById("status").innerText =
-      data.turn ? "Твой ход" : "Ход соперника";
-    renderHand();
+ws.onmessage=e=>{
+  const d=JSON.parse(e.data);
+  if(d.type==="state"){
+    hand=d.hand; phase=d.phase; yourTurn=d.yourTurn; table=d.table;
+    document.getElementById("trump").innerText="Козырь: "+d.trump;
+    render();
   }
-
-  if (data.type === "update") {
-    renderTable(data.table);
+  if(d.type==="update"){
+    phase=d.phase; yourTurn=(d.turn===user.id); table=d.table;
+    render();
   }
 };
 
-ws.onerror = () => {
-  document.getElementById("status").innerText =
-    "Ошибка подключения к серверу";
+function render(){
+  document.getElementById("info").innerText =
+    phase==="attack" ? (yourTurn?"Твой ход":"Ход соперника")
+    : phase==="defense" ? (yourTurn?"Защищайся":"Соперник защищается")
+    : "";
+
+  const t=document.getElementById("table");
+  t.innerHTML="";
+  if(table.attack) t.innerHTML+=table.attack.rank+table.attack.suit+" ";
+  if(table.defense) t.innerHTML+=table.defense.rank+table.defense.suit;
+
+  const h=document.getElementById("hand"); h.innerHTML="";
+  hand.forEach(c=>{
+    const el=document.createElement("div");
+    el.className="card";
+    el.innerText=c.rank+c.suit;
+    el.onclick=()=>{
+      if(!yourTurn) return;
+      if(phase==="attack") ws.send(JSON.stringify({type:"attack",card:c}));
+      if(phase==="defense") ws.send(JSON.stringify({type:"defend",card:c}));
+    };
+    h.appendChild(el);
+  });
+
+  document.getElementById("take").style.display =
+    (phase==="defense" && yourTurn) ? "inline-block":"none";
+}
+
+document.getElementById("take").onclick=()=>{
+  ws.send(JSON.stringify({type:"take"}));
 };
-
-/* ===== Render functions ===== */
-function renderHand() {
-  const handDiv = document.getElementById("hand");
-  handDiv.innerHTML = "";
-
-  hand.forEach((card, index) => {
-    const el = document.createElement("div");
-    el.className = "card";
-    el.innerText = card.rank + card.suit;
-
-    el.addEventListener("click", () => {
-      ws.send(JSON.stringify({
-        type: "play",
-        card: card
-      }));
-      hand.splice(index, 1);
-      renderHand();
-    });
-
-    handDiv.appendChild(el);
-  });
-}
-
-function renderTable(table) {
-  const tableDiv = document.getElementById("table");
-  tableDiv.innerHTML = "";
-
-  table.forEach(card => {
-    const el = document.createElement("div");
-    el.className = "card";
-    el.innerText = card.rank + card.suit;
-    tableDiv.appendChild(el);
-  });
-}
 </script>
 
 </body>
