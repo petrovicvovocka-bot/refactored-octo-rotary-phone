@@ -2,7 +2,7 @@ import { WebSocketServer } from "ws";
 
 const wss = new WebSocketServer({ port: process.env.PORT || 3000 });
 
-const suits = ["♠", "♥", "♦", "♣"];
+const suits = ["♠","♥","♦","♣"];
 const ranks = ["6","7","8","9","10","J","Q","K","A"];
 const power = Object.fromEntries(ranks.map((r,i)=>[r,i]));
 
@@ -31,6 +31,26 @@ const room = {
 function send(ws, data){ ws.send(JSON.stringify(data)); }
 function broadcast(data){ room.players.forEach(p=>send(p,data)); }
 
+function refillHands(){
+  for(const p of room.players){
+    const hand = room.hands[p.pid];
+    while(hand.length < 6 && room.deck.length){
+      hand.push(room.deck.shift());
+    }
+  }
+}
+
+function state(ws){
+  send(ws,{
+    type:"state",
+    hand: room.hands[ws.pid],
+    trump: room.trump,
+    phase: room.phase,
+    yourTurn: ws.pid===room.turn,
+    table: room.table
+  });
+}
+
 wss.on("connection", ws=>{
   ws.on("message", raw=>{
     const msg = JSON.parse(raw);
@@ -44,71 +64,41 @@ wss.on("connection", ws=>{
       if(room.players.length===2){
         room.deck = deck36();
         room.trump = room.deck[room.deck.length-1].suit;
+
         room.hands[room.players[0].pid]=room.deck.splice(0,6);
         room.hands[room.players[1].pid]=room.deck.splice(0,6);
+
         room.turn = room.players[0].pid;
         room.phase="attack";
 
-        room.players.forEach(p=>{
-          send(p,{
-            type:"state",
-            hand: room.hands[p.pid],
-            trump: room.trump,
-            phase: room.phase,
-            yourTurn: p.pid===room.turn,
-            table: room.table
-          });
-        });
+        room.players.forEach(p=>state(p));
       }
     }
 
     if(msg.type==="attack"){
-      if(room.phase!=="attack") return;
-      if(ws.pid!==room.turn) return;
+      if(room.phase!=="attack" || ws.pid!==room.turn) return;
 
       const hand = room.hands[ws.pid];
-      const idx = hand.findIndex(c=>c.rank===msg.card.rank && c.suit===msg.card.suit);
-      if(idx<0) return;
+      const i = hand.findIndex(c=>c.rank===msg.card.rank && c.suit===msg.card.suit);
+      if(i<0) return;
 
-      room.table.attack = hand.splice(idx,1)[0];
+      room.table.attack = hand.splice(i,1)[0];
       room.phase="defense";
       room.turn = room.players.find(p=>p.pid!==ws.pid).pid;
 
-      broadcast({ type:"update", table:room.table, phase:room.phase, turn:room.turn });
+      broadcast({type:"update", table:room.table, phase:room.phase, turn:room.turn});
     }
 
     if(msg.type==="defend"){
-      if(room.phase!=="defense") return;
-      if(ws.pid!==room.turn) return;
+      if(room.phase!=="defense" || ws.pid!==room.turn) return;
 
       const hand = room.hands[ws.pid];
-      const idx = hand.findIndex(c=>c.rank===msg.card.rank && c.suit===msg.card.suit);
-      if(idx<0) return;
+      const i = hand.findIndex(c=>c.rank===msg.card.rank && c.suit===msg.card.suit);
+      if(i<0) return;
 
-      const def = hand[idx];
+      const def = hand[i];
       if(!canBeat(room.table.attack, def, room.trump)) return;
 
-      room.table.defense = hand.splice(idx,1)[0];
-      room.phase="attack";
-      room.turn = room.players.find(p=>p.pid!==ws.pid).pid;
+      room.table.defense = hand.splice(i,1)[0];
 
-      broadcast({ type:"update", table:room.table, phase:room.phase, turn:room.turn });
-    }
-
-    if(msg.type==="take"){
-      if(room.phase!=="defense") return;
-      if(ws.pid!==room.turn) return;
-
-      room.hands[ws.pid].push(room.table.attack);
-      if(room.table.defense) room.hands[ws.pid].push(room.table.defense);
-
-      room.table={attack:null, defense:null};
-      room.phase="attack";
-      room.turn = room.players.find(p=>p.pid!==ws.pid).pid;
-
-      broadcast({ type:"update", table:room.table, phase:room.phase, turn:room.turn });
-    }
-  });
-});
-
-console.log("✅ Durak server 6.3 running");
+      broadcast({type
