@@ -11,7 +11,7 @@ def start(msg):
         types.InlineKeyboardButton(
             text="🃏 Открыть Дурака",
             web_app=types.WebAppInfo(
-                url="https://petrovicvovocka-bot.github.io/refactored-octo-rotary-phone/"
+                url="https://petrovicvovocka-bot.github.io/refactored-octo-rotary-phone/?v=2"
             )
         )
     )
