@@ -3,7 +3,7 @@ import { WebSocketServer } from "ws";
 const wss = new WebSocketServer({ port: process.env.PORT || 3000 });
 
 /* ===== CARDS ===== */
-const suits = ["♠", "♥", "♦", "♣"];
+const suits = ["♠","♥","♦","♣"];
 const ranks = ["6","7","8","9","10","J","Q","K","A"];
 const power = Object.fromEntries(ranks.map((r,i)=>[r,i]));
 
@@ -19,7 +19,7 @@ function canBeat(att, def, trump){
   return false;
 }
 
-/* ===== GAME STATE (1 ROOM MVP) ===== */
+/* ===== GAME STATE ===== */
 const room = {
   players: [],
   deck: [],
@@ -58,6 +58,15 @@ function sendState(ws){
     table: room.table
   });
 }
+function sendUpdate(){
+  broadcast({
+    type:"update",
+    table: room.table,
+    phase: room.phase,
+    turn: room.turn,
+    trump: room.trump
+  });
+}
 
 /* ===== WEBSOCKET ===== */
 wss.on("connection", ws => {
@@ -92,6 +101,7 @@ wss.on("connection", ws => {
     if(msg.type==="attack"){
       if(room.phase!=="attack") return;
       if(ws.pid!==room.turn) return;
+      if(room.table.attack) return;
 
       const h = room.hands[ws.pid];
       const i = h.findIndex(c=>c.rank===msg.card.rank && c.suit===msg.card.suit);
@@ -103,18 +113,14 @@ wss.on("connection", ws => {
       room.phase = "defense";
       room.turn = otherPlayer(ws.pid);
 
-      broadcast({
-        type:"state",
-        table:room.table,
-        phase:room.phase,
-        turn:room.turn
-      });
+      sendUpdate();
     }
 
     /* ===== DEFEND ===== */
     if(msg.type==="defend"){
       if(room.phase!=="defense") return;
       if(ws.pid!==room.turn) return;
+      if(!room.table.attack || room.table.defense) return;
 
       const h = room.hands[ws.pid];
       const i = h.findIndex(c=>c.rank===msg.card.rank && c.suit===msg.card.suit);
@@ -125,18 +131,14 @@ wss.on("connection", ws => {
 
       room.table.defense = h.splice(i,1)[0];
 
-      broadcast({
-        type:"state",
-        table:room.table,
-        phase:room.phase,
-        turn:room.turn
-      });
+      sendUpdate();
     }
 
     /* ===== BITO ===== */
     if(msg.type==="bito"){
       if(room.phase!=="defense") return;
       if(ws.pid!==room.turn) return;
+      if(!room.table.attack || !room.table.defense) return;
 
       room.table = { attack:null, defense:null };
       refill();
@@ -151,9 +153,10 @@ wss.on("connection", ws => {
     if(msg.type==="take"){
       if(room.phase!=="defense") return;
       if(ws.pid!==room.turn) return;
+      if(!room.table.attack) return;
 
       const h = room.hands[ws.pid];
-      if(room.table.attack) h.push(room.table.attack);
+      h.push(room.table.attack);
       if(room.table.defense) h.push(room.table.defense);
 
       room.table = { attack:null, defense:null };
@@ -167,4 +170,4 @@ wss.on("connection", ws => {
   });
 });
 
-console.log("✅ Durak server (stable) running");
+console.log("✅ Durak server (stable + fixed) running");
