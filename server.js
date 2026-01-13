@@ -27,19 +27,13 @@ const room = {
   trump: null,
   table: { attack:null, defense:null },
   phase: "wait", // wait | attack | defense
-  turn: null
+  attacker: null,
+  defender: null
 };
 
 /* ===== HELPERS ===== */
-function send(ws, data){
-  ws.send(JSON.stringify(data));
-}
-function broadcast(data){
-  room.players.forEach(p=>send(p,data));
-}
-function otherPlayer(pid){
-  return room.players.find(p=>p.pid!==pid)?.pid;
-}
+function send(ws, data){ ws.send(JSON.stringify(data)); }
+function broadcast(data){ room.players.forEach(p=>send(p,data)); }
 function refill(){
   for(const p of room.players){
     const h = room.hands[p.pid];
@@ -48,23 +42,15 @@ function refill(){
     }
   }
 }
-function sendState(ws){
-  send(ws,{
+function sendState(){
+  broadcast({
     type:"state",
-    hand: room.hands[ws.pid],
+    hands: room.hands,
     trump: room.trump,
     phase: room.phase,
-    yourTurn: ws.pid===room.turn,
+    attacker: room.attacker,
+    defender: room.defender,
     table: room.table
-  });
-}
-function sendUpdate(){
-  broadcast({
-    type:"update",
-    table: room.table,
-    phase: room.phase,
-    turn: room.turn,
-    trump: room.trump
   });
 }
 
@@ -77,30 +63,31 @@ wss.on("connection", ws => {
     /* ===== JOIN ===== */
     if(msg.type==="join"){
       ws.pid = msg.playerId;
-      if(room.players.length >= 2) return;
+      if(room.players.length>=2) return;
 
       room.players.push(ws);
-      room.hands[ws.pid] = [];
+      room.hands[ws.pid]=[];
 
-      if(room.players.length === 2){
+      if(room.players.length===2){
         room.deck = createDeck();
-        room.trump = room.deck[room.deck.length - 1].suit;
+        room.trump = room.deck[room.deck.length-1].suit;
 
         room.players.forEach(p=>{
           room.hands[p.pid] = room.deck.splice(0,6);
         });
 
+        room.attacker = room.players[0].pid;
+        room.defender = room.players[1].pid;
         room.phase = "attack";
-        room.turn = room.players[0].pid;
 
-        room.players.forEach(p=>sendState(p));
+        sendState();
       }
     }
 
     /* ===== ATTACK ===== */
     if(msg.type==="attack"){
       if(room.phase!=="attack") return;
-      if(ws.pid!==room.turn) return;
+      if(ws.pid!==room.attacker) return;
       if(room.table.attack) return;
 
       const h = room.hands[ws.pid];
@@ -108,18 +95,15 @@ wss.on("connection", ws => {
       if(i<0) return;
 
       room.table.attack = h.splice(i,1)[0];
-      room.table.defense = null;
-
       room.phase = "defense";
-      room.turn = otherPlayer(ws.pid);
 
-      sendUpdate();
+      sendState();
     }
 
     /* ===== DEFEND ===== */
     if(msg.type==="defend"){
       if(room.phase!=="defense") return;
-      if(ws.pid!==room.turn) return;
+      if(ws.pid!==room.defender) return;
       if(!room.table.attack || room.table.defense) return;
 
       const h = room.hands[ws.pid];
@@ -131,28 +115,31 @@ wss.on("connection", ws => {
 
       room.table.defense = h.splice(i,1)[0];
 
-      sendUpdate();
+      sendState();
     }
 
     /* ===== BITO ===== */
     if(msg.type==="bito"){
       if(room.phase!=="defense") return;
-      if(ws.pid!==room.turn) return;
+      if(ws.pid!==room.defender) return;
       if(!room.table.attack || !room.table.defense) return;
 
       room.table = { attack:null, defense:null };
       refill();
 
-      room.phase = "attack";
-      room.turn = otherPlayer(ws.pid);
+      // 🔁 меняем роли
+      const oldAttacker = room.attacker;
+      room.attacker = room.defender;
+      room.defender = oldAttacker;
 
-      room.players.forEach(p=>sendState(p));
+      room.phase = "attack";
+      sendState();
     }
 
     /* ===== TAKE ===== */
     if(msg.type==="take"){
       if(room.phase!=="defense") return;
-      if(ws.pid!==room.turn) return;
+      if(ws.pid!==room.defender) return;
       if(!room.table.attack) return;
 
       const h = room.hands[ws.pid];
@@ -162,12 +149,13 @@ wss.on("connection", ws => {
       room.table = { attack:null, defense:null };
       refill();
 
+      // атакующий остаётся тем же
+      room.defender = room.players.find(p=>p.pid!==room.defender).pid;
       room.phase = "attack";
-      room.turn = otherPlayer(ws.pid);
 
-      room.players.forEach(p=>sendState(p));
+      sendState();
     }
   });
 });
 
-console.log("✅ Durak server (stable + fixed) running");
+console.log("✅ Durak server FINAL (no freezes) running");
