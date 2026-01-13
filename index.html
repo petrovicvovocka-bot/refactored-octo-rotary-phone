@@ -2,90 +2,223 @@
 <html lang="ru">
 <head>
 <meta charset="UTF-8">
-<title>🃏 Дурак</title>
+<title>🃏 Durak Online</title>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <script src="https://telegram.org/js/telegram-web-app.js"></script>
+
 <style>
-body{background:#0b5c2d;color:#fff;font-family:Arial;text-align:center}
-#hand{display:flex;gap:8px;justify-content:center;flex-wrap:wrap}
-.card{width:60px;height:90px;background:#fff;color:#000;border-radius:8px;
-display:flex;align-items:center;justify-content:center;cursor:pointer}
-button{padding:8px 14px;font-size:16px;margin:4px}
-</style>
-</head>
-<body>
+* { box-sizing: border-box; }
 
-<h1>🃏 Дурак</h1>
-<div id="info"></div>
-<div id="trump"></div>
-<div id="table"></div>
-<div id="hand"></div>
-
-<button id="bito" style="display:none">Бито</button>
-<button id="take" style="display:none">Забрать</button>
-
-<script>
-const WSS_URL="wss://durak-server-pfxg.onrender.com";
-const tg=window.Telegram.WebApp; tg.ready();
-const user=tg.initDataUnsafe.user;
-const ws=new WebSocket(WSS_URL);
-
-let hand=[], phase="", yourTurn=false, table={};
-
-ws.onopen=()=>ws.send(JSON.stringify({type:"join",playerId:user.id}));
-
-ws.onmessage=e=>{
-  const d=JSON.parse(e.data);
-
-  if(d.type==="state"){
-    hand=d.hand; phase=d.phase; yourTurn=d.yourTurn; table=d.table;
-    document.getElementById("trump").innerText="Козырь: "+d.trump;
-    render();
-  }
-
-  if(d.type==="update"){
-    table=d.table;
-    render();
-  }
-};
-
-function render(){
-  document.getElementById("info").innerText =
-    phase==="attack" ? (yourTurn?"Твой ход":"Ход соперника")
-    : phase==="defense" ? (yourTurn?"Защищайся":"Соперник защищается")
-    : "";
-
-  const t=document.getElementById("table");
-  t.innerHTML="";
-  if(table.attack) t.innerHTML+=table.attack.rank+table.attack.suit+" ";
-  if(table.defense) t.innerHTML+=table.defense.rank+table.defense.suit;
-
-  const h=document.getElementById("hand"); h.innerHTML="";
-  hand.forEach(c=>{
-    const el=document.createElement("div");
-    el.className="card";
-    el.innerText=c.rank+c.suit;
-    el.onclick=()=>{
-      if(!yourTurn) return;
-      if(phase==="attack") ws.send(JSON.stringify({type:"attack",card:c}));
-      if(phase==="defense") ws.send(JSON.stringify({type:"defend",card:c}));
-    };
-    h.appendChild(el);
-  });
-
-  document.getElementById("bito").style.display =
-    (phase==="defense" && !yourTurn) ? "inline-block":"none";
-
-  document.getElementById("take").style.display =
-    (phase==="defense" && yourTurn) ? "inline-block":"none";
+body {
+  margin: 0;
+  background: radial-gradient(circle at top, #146b3a, #0b3d22);
+  color: #fff;
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, Arial, sans-serif;
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
 }
 
-document.getElementById("bito").onclick=()=>{
-  ws.send(JSON.stringify({type:"bito"}));
-};
-document.getElementById("take").onclick=()=>{
-  ws.send(JSON.stringify({type:"take"}));
-};
+header {
+  padding: 10px;
+  text-align: center;
+  font-weight: 600;
+}
+
+#status {
+  font-size: 14px;
+  opacity: .85;
+}
+
+#trump {
+  font-size: 16px;
+  margin-top: 4px;
+}
+
+#table {
+  flex: 1;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 20px;
+}
+
+#hand {
+  padding: 12px;
+  display: flex;
+  justify-content: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.card {
+  width: 64px;
+  height: 96px;
+  background: #fff;
+  color: #000;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 18px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: transform .15s, box-shadow .15s;
+}
+
+.card:hover {
+  transform: translateY(-6px);
+  box-shadow: 0 8px 16px rgba(0,0,0,.25);
+}
+
+.card.disabled {
+  opacity: .4;
+  cursor: default;
+  transform: none;
+  box-shadow: none;
+}
+
+.controls {
+  display: flex;
+  justify-content: center;
+  gap: 12px;
+  padding-bottom: 10px;
+}
+
+button {
+  padding: 8px 16px;
+  border-radius: 8px;
+  border: none;
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+#bito { background: #ffd700; }
+#take { background: #ff6b6b; }
+
+.hidden { display: none; }
+</style>
+</head>
+
+<body>
+
+<header>
+  <div>🃏 Durak Online</div>
+  <div id="status">Подключение…</div>
+  <div id="trump"></div>
+</header>
+
+<div id="table"></div>
+
+<div class="controls">
+  <button id="bito" class="hidden">Бито</button>
+  <button id="take" class="hidden">Забрать</button>
+</div>
+
+<div id="hand"></div>
+
+<script>
+(() => {
+  const WSS_URL = "wss://durak-server-pfxg.onrender.com";
+
+  const tg = window.Telegram?.WebApp;
+  if (!tg) return setStatus("Открой через Telegram");
+
+  tg.ready();
+  const user = tg.initDataUnsafe?.user;
+  if (!user) return setStatus("Нет Telegram user");
+
+  let ws;
+  let hand = [];
+  let table = {};
+  let phase = "";
+  let yourTurn = false;
+
+  const statusEl = document.getElementById("status");
+  const trumpEl = document.getElementById("trump");
+  const handEl = document.getElementById("hand");
+  const tableEl = document.getElementById("table");
+  const bitoBtn = document.getElementById("bito");
+  const takeBtn = document.getElementById("take");
+
+  function setStatus(text) {
+    statusEl.innerText = text;
+  }
+
+  function connect() {
+    ws = new WebSocket(WSS_URL);
+
+    ws.onopen = () => {
+      ws.send(JSON.stringify({ type: "join", playerId: user.id }));
+      setStatus("Ожидание соперника…");
+    };
+
+    ws.onmessage = e => {
+      const d = JSON.parse(e.data);
+
+      if (d.type === "state") {
+        hand = d.hand || [];
+        table = d.table || {};
+        phase = d.phase || "";
+        yourTurn = !!d.yourTurn;
+        trumpEl.innerText = "Козырь: " + d.trump;
+        render();
+      }
+
+      if (d.type === "update") {
+        table = d.table || table;
+        render();
+      }
+    };
+
+    ws.onerror = () => setStatus("Ошибка соединения");
+    ws.onclose = () => setTimeout(connect, 1500);
+  }
+
+  function render() {
+    setStatus(
+      phase === "attack"
+        ? (yourTurn ? "Твой ход" : "Ход соперника")
+        : phase === "defense"
+        ? (yourTurn ? "Защищайся" : "Соперник защищается")
+        : "Ожидание…"
+    );
+
+    tableEl.innerHTML = "";
+    if (table.attack) tableEl.appendChild(cardEl(table.attack));
+    if (table.defense) tableEl.appendChild(cardEl(table.defense));
+
+    handEl.innerHTML = "";
+    hand.forEach(card => {
+      const el = cardEl(card);
+      if (!yourTurn) el.classList.add("disabled");
+      el.onclick = () => {
+        if (!yourTurn) return;
+        ws.send(JSON.stringify({
+          type: phase === "attack" ? "attack" : "defend",
+          card
+        }));
+      };
+      handEl.appendChild(el);
+    });
+
+    bitoBtn.classList.toggle("hidden", !(phase === "defense" && !yourTurn));
+    takeBtn.classList.toggle("hidden", !(phase === "defense" && yourTurn));
+  }
+
+  function cardEl(card) {
+    const el = document.createElement("div");
+    el.className = "card";
+    el.innerText = card.rank + card.suit;
+    return el;
+  }
+
+  bitoBtn.onclick = () => ws.send(JSON.stringify({ type: "bito" }));
+  takeBtn.onclick = () => ws.send(JSON.stringify({ type: "take" }));
+
+  connect();
+})();
 </script>
 
 </body>
